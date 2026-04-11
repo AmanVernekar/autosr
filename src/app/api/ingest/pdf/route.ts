@@ -1,5 +1,4 @@
 import { NextRequest, NextResponse } from 'next/server'
-import pdf from 'pdf-parse'
 
 export async function POST(request: NextRequest) {
   try {
@@ -15,11 +14,27 @@ export async function POST(request: NextRequest) {
     }
 
     const buffer = Buffer.from(await file.arrayBuffer())
-    const data = await pdf(buffer)
+    const uint8Array = new Uint8Array(buffer)
+
+    // Dynamic import to avoid SSR issues with pdfjs-dist
+    const pdfjsLib = await import('pdfjs-dist/legacy/build/pdf.mjs')
+
+    const doc = await pdfjsLib.getDocument({ data: uint8Array }).promise
+    const pages: string[] = []
+
+    for (let i = 1; i <= doc.numPages; i++) {
+      const page = await doc.getPage(i)
+      const content = await page.getTextContent()
+      const text = content.items
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        .map((item: any) => item.str || '')
+        .join(' ')
+      pages.push(text)
+    }
 
     return NextResponse.json({
-      text: data.text,
-      pages: data.numpages,
+      text: pages.join('\n\n'),
+      pages: doc.numPages,
       filename: file.name,
     })
   } catch (error) {

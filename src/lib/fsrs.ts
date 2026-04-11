@@ -1,4 +1,4 @@
-import { createEmptyCard, fsrs, generatorParameters, Rating, type Card as FSRSCard, type RecordLog } from 'ts-fsrs'
+import { createEmptyCard, fsrs, generatorParameters, Rating, type Card as FSRSCard } from 'ts-fsrs'
 import type { CardProgress } from './types'
 
 const params = generatorParameters()
@@ -27,8 +27,8 @@ export function scheduleCard(progress: CardProgress, rating: 1 | 2 | 3 | 4) {
 
   const now = new Date()
   const result = f.repeat(card, now)
-  const ratingKey = ratingToKey(rating)
-  const scheduled = result[ratingKey]
+  // Result is indexed by Rating enum values (1=Again, 2=Hard, 3=Good, 4=Easy)
+  const scheduled = (result as unknown as Record<number, { card: FSRSCard }>)[rating]
 
   return {
     stability: scheduled.card.stability,
@@ -60,14 +60,5 @@ function numberToState(num: number): 'new' | 'learning' | 'review' | 'relearning
     case 2: return 'review'
     case 3: return 'relearning'
     default: return 'new'
-  }
-}
-
-function ratingToKey(rating: 1 | 2 | 3 | 4): Rating {
-  switch (rating) {
-    case 1: return Rating.Again
-    case 2: return Rating.Hard
-    case 3: return Rating.Good
-    case 4: return Rating.Easy
   }
 }

@@ -29,7 +29,7 @@ export default function NewDeckPage() {
   const [freetextPrompt, setFreetextPrompt] = useState('')
 
   // Generated cards state
-  const [generatedCards, setGeneratedCards] = useState<GeneratedCard[]>([])
+  const [, setGeneratedCards] = useState<GeneratedCard[]>([])
   const [editingCards, setEditingCards] = useState<GeneratedCard[]>([])
   const [saving, setSaving] = useState(false)
 

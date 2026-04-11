@@ -3,7 +3,7 @@
 import { useState } from 'react'
 import type { Card } from '@/lib/types'
 
-export default function DeckCards({ cards, deckId }: { cards: Card[]; deckId: string }) {
+export default function DeckCards({ cards }: { cards: Card[] }) {
   const [expandedCard, setExpandedCard] = useState<string | null>(null)
 
   return (

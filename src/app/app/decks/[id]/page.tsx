@@ -66,7 +66,7 @@ export default async function DeckDetailPage({
         )}
       </div>
 
-      <DeckCards cards={cards || []} deckId={deck.id} />
+      <DeckCards cards={cards || []} />
     </div>
   )
 }
