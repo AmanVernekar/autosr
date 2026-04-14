@@ -1,4 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server'
+import { extractText } from 'unpdf'
+
+export const maxDuration = 60
 
 export async function POST(request: NextRequest) {
   try {
@@ -13,28 +16,15 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: 'File must be a PDF' }, { status: 400 })
     }
 
-    const buffer = Buffer.from(await file.arrayBuffer())
-    const uint8Array = new Uint8Array(buffer)
+    const buffer = await file.arrayBuffer()
+    const data = new Uint8Array(buffer)
 
-    // Dynamic import to avoid SSR issues with pdfjs-dist
-    const pdfjsLib = await import('pdfjs-dist/legacy/build/pdf.mjs')
-
-    const doc = await pdfjsLib.getDocument({ data: uint8Array }).promise
-    const pages: string[] = []
-
-    for (let i = 1; i <= doc.numPages; i++) {
-      const page = await doc.getPage(i)
-      const content = await page.getTextContent()
-      const text = content.items
-        // eslint-disable-next-line @typescript-eslint/no-explicit-any
-        .map((item: any) => item.str || '')
-        .join(' ')
-      pages.push(text)
-    }
+    const result = await extractText(data)
+    const text = result.text.join('\n\n')
 
     return NextResponse.json({
-      text: pages.join('\n\n'),
-      pages: doc.numPages,
+      text,
+      pages: result.totalPages,
       filename: file.name,
     })
   } catch (error) {

@@ -1,6 +1,6 @@
 'use client'
 
-import { useState } from 'react'
+import { useState, useEffect, useRef } from 'react'
 import { useRouter } from 'next/navigation'
 import { createClient } from '@/lib/supabase/client'
 import type { DocumentStructure, GeneratedCard, CoverageInstructions } from '@/lib/types'
@@ -32,6 +32,15 @@ export default function NewDeckPage() {
   const [, setGeneratedCards] = useState<GeneratedCard[]>([])
   const [editingCards, setEditingCards] = useState<GeneratedCard[]>([])
   const [saving, setSaving] = useState(false)
+  const [abortController, setAbortController] = useState<AbortController | null>(null)
+  const abortRef = useRef<AbortController | null>(null)
+
+  // Abort any in-flight generation on unmount (page reload/navigation)
+  useEffect(() => {
+    return () => {
+      abortRef.current?.abort()
+    }
+  }, [])
 
   // Step 1: Upload / paste content
   async function handleUpload() {
@@ -103,6 +112,12 @@ export default function NewDeckPage() {
 
   // Step 2: Generate cards
   async function handleGenerate() {
+    // Abort any previous generation
+    if (abortController) abortController.abort()
+    const controller = new AbortController()
+    setAbortController(controller)
+    abortRef.current = controller
+
     setError(null)
     setStep('generating')
 
@@ -110,6 +125,7 @@ export default function NewDeckPage() {
       const res = await fetch('/api/generate', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
+        signal: controller.signal,
         body: JSON.stringify({
           text: rawText,
           depth,
@@ -124,7 +140,7 @@ export default function NewDeckPage() {
       const data = await res.json()
 
       if (!res.ok) {
-        setError(data.error || 'Failed to generate cards')
+        setError(data.error || `Server error (${res.status})`)
         setStep('coverage')
         return
       }
@@ -133,7 +149,8 @@ export default function NewDeckPage() {
       setEditingCards(data.cards.map((c: GeneratedCard) => ({ ...c })))
       setStep('review')
     } catch (err) {
-      setError('Failed to generate cards')
+      if (err instanceof DOMException && err.name === 'AbortError') return
+      setError(err instanceof Error ? err.message : 'Failed to generate cards')
       setStep('coverage')
       console.error(err)
     }
