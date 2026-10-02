@@ -100,6 +100,7 @@ export async function POST(request: NextRequest) {
     // Split document into chunks for each batch so they cover different sections
     const chunkSize = Math.floor(truncated.length / numBatches)
     const allCards: unknown[] = []
+    const failedBatches: number[] = []
 
     // Run batches sequentially to respect rate limits
     // Use request signal to abort if client disconnects
@@ -129,37 +130,47 @@ export async function POST(request: NextRequest) {
 
       console.log(`Batch ${batch + 1}/${numBatches}: ${batchSize} cards, ${docChunk.length} chars`)
 
-      const message = await anthropic.messages.create({
-        model: 'claude-haiku-4-5-20251001',
-        max_tokens: 8192,
-        messages: [
-          {
-            role: 'user',
-            content: buildPrompt(
-              docChunk, depth, selected_sections, skip_text,
-              card_types, batchSize, freetext_prompt, batchInfo,
-            ),
-          },
-        ],
-      })
+      try {
+        const message = await anthropic.messages.create({
+          model: 'claude-haiku-4-5-20251001',
+          max_tokens: 8192,
+          messages: [
+            {
+              role: 'user',
+              content: buildPrompt(
+                docChunk, depth, selected_sections, skip_text,
+                card_types, batchSize, freetext_prompt, batchInfo,
+              ),
+            },
+          ],
+        })
 
-      const content = message.content[0]
-      if (content.type === 'text') {
-        allCards.push(...parseCards(content.text))
+        const content = message.content[0]
+        if (content.type === 'text') {
+          allCards.push(...parseCards(content.text))
+        }
+      } catch (batchError) {
+        const msg = batchError instanceof Error ? batchError.message : 'Unknown error'
+        console.error(`Batch ${batch + 1} failed: ${msg}`)
+        failedBatches.push(batch + 1)
+
+        // If it's a rate limit, stop trying more batches
+        if (msg.includes('rate_limit')) break
       }
     }
 
     if (allCards.length === 0) {
-      return NextResponse.json({ error: 'Failed to generate cards' }, { status: 500 })
+      return NextResponse.json({ error: 'All batches failed. Please try again.' }, { status: 500 })
     }
 
-    return NextResponse.json({ cards: allCards })
+    const warning = failedBatches.length > 0
+      ? `Generated ${allCards.length} cards, but batch(es) ${failedBatches.join(', ')} of ${numBatches} failed. Some sections may be missing.`
+      : undefined
+
+    return NextResponse.json({ cards: allCards, warning })
   } catch (error) {
     console.error('Card generation error:', error)
     const message = error instanceof Error ? error.message : 'Unknown error'
-    if (message.includes('rate_limit')) {
-      return NextResponse.json({ error: 'Rate limited by Anthropic API. Please wait a minute and try again.' }, { status: 429 })
-    }
     if (message.includes('abort') || message.includes('cancel')) {
       return NextResponse.json({ error: 'Generation was cancelled.' }, { status: 499 })
     }

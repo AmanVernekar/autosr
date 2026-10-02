@@ -147,6 +147,9 @@ export default function NewDeckPage() {
 
       setGeneratedCards(data.cards)
       setEditingCards(data.cards.map((c: GeneratedCard) => ({ ...c })))
+      if (data.warning) {
+        setError(data.warning)
+      }
       setStep('review')
     } catch (err) {
       if (err instanceof DOMException && err.name === 'AbortError') return
